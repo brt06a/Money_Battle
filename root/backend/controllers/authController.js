@@ -1,47 +1,89 @@
-const User = require('../models/user');
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '7d'
-  });
-};
+// Environment variables
+const JWT_SECRET = process.env.JWT_SECRET || 'defaultsecret';
 
-exports.registerUser = async (req, res) => {
-  const { username, email, password } = req.body;
+exports.register = async (req, res) => {
   try {
-    const userExists = await User.findOne({ email });
-    if (userExists) return res.status(400).json({ message: 'User already exists' });
+    const { username, email, password, referralCode } = req.body;
 
-    const user = await User.create({ username, email, password });
-    res.status(201).json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      token: generateToken(user._id),
+    // Check if user exists
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username or Email already exists' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Generate referral code (optional logic)
+    const userReferralCode = username + Math.floor(Math.random() * 10000);
+
+    // Create new user
+    const newUser = new User({
+      username,
+      email,
+      password: hashedPassword,
+      referralCode: userReferralCode,
+      referredBy: referralCode || '',
     });
+
+    await newUser.save();
+
+    res.status(201).json({ message: 'User registered successfully' });
+
   } catch (err) {
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('Registration Error:', err);
+    res.status(500).json({ message: 'Server Error' });
   }
 };
 
-exports.loginUser = async (req, res) => {
-  const { email, password } = req.body;
+exports.login = async (req, res) => {
   try {
-    const user = await User.findOne({ email });
-    if (!user || !(await user.matchPassword(password))) {
+    const { emailOrUsername, password } = req.body;
+
+    // Find user by email or username
+    const user = await User.findOne({
+      $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
+    });
+
+    if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    res.json({
-      _id: user._id,
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const payload = {
+      id: user._id,
       username: user.username,
-      email: user.email,
+      isAdmin: user.isAdmin,
       isPremium: user.isPremium,
-      walletBalance: user.walletBalance,
-      token: generateToken(user._id),
+      premiumTier: user.premiumTier,
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isPremium: user.isPremium,
+        premiumTier: user.premiumTier,
+        walletBalance: user.walletBalance,
+      },
     });
   } catch (err) {
-    res.status(500).json({ error: 'Login failed' });
+    console.error('Login Error:', err);
+    res.status(500).json({ message: 'Server Error' });
   }
 };
