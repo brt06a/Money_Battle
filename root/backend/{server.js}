@@ -1,0 +1,48 @@
+// Load environment variables
+require('dotenv').config();
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/user');
+const gameRoutes = require('./routes/game');
+const paymentRoutes = require('./routes/payment');
+
+const app = express();
+
+// Middleware
+app.use(helmet()); // Security headers
+app.use(cors()); // Cross-origin
+app.use(morgan('dev')); // Logs
+app.use(express.json()); // Parse JSON requests
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/games', gameRoutes);
+app.use('/api/payments', paymentRoutes);
+
+// Root route
+app.get('/', (req, res) => {
+  res.send('API is running...');
+});
+
+// Connect to MongoDB and start server
+const PORT = process.env.PORT || 5000;
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => {
+  console.log('✅ MongoDB connected');
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+  });
+})
+.catch((err) => {
+  console.error('❌ MongoDB connection error:', err.message);
+});
