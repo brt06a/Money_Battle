@@ -1,26 +1,81 @@
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+require('dotenv').config();
 const User = require('../models/User');
 
-dotenv.config();
-const MONGO_URI = process.env.MONGO_URI;
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('MongoDB connected (manage-users.js)'))
+.catch(err => {
+  console.error('MongoDB connection error:', err);
+  process.exit(1);
+});
 
-const connectDB = async () => {
+// Display All Users
+async function listAllUsers() {
   try {
-    await mongoose.connect(MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    const users = await User.find({});
+    console.log('===== Registered Users =====');
+    users.forEach(user => {
+      console.log(`ID: ${user._id}`);
+      console.log(`Username: ${user.username}`);
+      console.log(`Email: ${user.email}`);
+      console.log(`Active: ${user.isActive}`);
+      console.log(`Role: ${user.role}`);
+      console.log(`Wallet Balance: ₹${user.walletBalance}`);
+      console.log('-------------------------');
     });
-    console.log('✅ MongoDB connected');
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1);
+  } catch (error) {
+    console.error('Error listing users:', error);
+  } finally {
+    mongoose.connection.close();
   }
-};
+}
 
-const listUsers = async () => {
+// Activate or Deactivate a User
+async function setUserActiveStatus(userId, status) {
   try {
-    const users = await User.find().select('-password');
-    console.log('📋 User List:');
-    users.forEach((user, index) => {
-      console.log(`${index + 1}. ID: ${user._id}, Username: ${user.username}, Email: ${user
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error('User not found.');
+      return;
+    }
+    user.isActive = status;
+    await user.save();
+    console.log(`User ${user.username} status updated to ${status ? 'active' : 'inactive'}.`);
+  } catch (error) {
+    console.error('Error updating user status:', error);
+  } finally {
+    mongoose.connection.close();
+  }
+}
+
+// Change User Role
+async function changeUserRole(userId, newRole) {
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error('User not found.');
+      return;
+    }
+    user.role = newRole;
+    await user.save();
+    console.log(`User ${user.username} role changed to ${newRole}.`);
+  } catch (error) {
+    console.error('Error changing user role:', error);
+  } finally {
+    mongoose.connection.close();
+  }
+}
+
+// Example usage:
+// listAllUsers();
+// setUserActiveStatus('USER_ID_HERE', true);
+// changeUserRole('USER_ID_HERE', 'admin');
+
+// Uncomment the function you want to run
+listAllUsers();
+// setUserActiveStatus('65f2a9c4...exampleUserId', false);
+// changeUserRole('65f2a9c4...exampleUserId', 'user');
